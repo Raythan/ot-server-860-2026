@@ -30,6 +30,7 @@
 #include "iologindata.h"
 #include "configmanager.h"
 #include "teleport.h"
+#include "tools.h"
 #include "databasemanager.h"
 #include "bed.h"
 #include "monster.h"
@@ -9299,8 +9300,11 @@ int LuaScriptInterface::luaPlayerGetSpectators(lua_State* L)
 	lua_createtable(L, spectators.size(), 0);
 
 	int _spectators = 0;
-	for (const auto spectator : spectators){
+	for (const auto& spectator : spectators){
 		_spectators += 1;
+		lua_pushnumber(L, _spectators);
+		lua_pushstring(L, convertIPToString(spectator->getIP()).c_str());
+		lua_settable(L, -3);
 	}
 
 	lua_pushnumber(L, _spectators);

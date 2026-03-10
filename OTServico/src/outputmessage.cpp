@@ -29,13 +29,7 @@ extern Scheduler g_scheduler;
 const uint16_t OUTPUTMESSAGE_FREE_LIST_CAPACITY = 2048;
 const std::chrono::milliseconds OUTPUTMESSAGE_AUTOSEND_DELAY {10};
 
-class OutputMessageAllocator
-{
-	public:
-		using value_type = OutputMessage;
-		template<typename U>
-		struct rebind {using other = LockfreePoolingAllocator<U, OUTPUTMESSAGE_FREE_LIST_CAPACITY>;};
-};
+using OutputMessageAllocator = LockfreePoolingAllocator<OutputMessage, OUTPUTMESSAGE_FREE_LIST_CAPACITY>;
 
 void OutputMessagePool::scheduleSendAll()
 {

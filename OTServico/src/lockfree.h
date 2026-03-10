@@ -27,12 +27,14 @@
 #include <boost/lockfree/stack.hpp>
 
 template <typename T, size_t CAPACITY>
-class LockfreePoolingAllocator : public std::allocator<T>
+class LockfreePoolingAllocator
 {
 	public:
-		template <typename U>
-		explicit constexpr LockfreePoolingAllocator(const U&) {}
 		using value_type = T;
+
+		LockfreePoolingAllocator() = default;
+		template <typename U>
+		constexpr LockfreePoolingAllocator(const LockfreePoolingAllocator<U, CAPACITY>&) noexcept {}
 
 		T* allocate(size_t) const {
 			T* p; // NOTE: p doesn't have to be initialized
@@ -51,6 +53,11 @@ class LockfreePoolingAllocator : public std::allocator<T>
 			}
 		}
 
+		template <typename U>
+		struct rebind {
+			using other = LockfreePoolingAllocator<U, CAPACITY>;
+		};
+
 	private:
 		using FreeList = boost::lockfree::stack<T*, boost::lockfree::capacity<CAPACITY>>;
 		static FreeList& getFreeList() {
@@ -58,5 +65,15 @@ class LockfreePoolingAllocator : public std::allocator<T>
 			return freeList;
 		}
 };
+
+template <typename T, size_t CAPACITY, typename U, size_t CAPACITY2>
+inline bool operator==(const LockfreePoolingAllocator<T, CAPACITY>&, const LockfreePoolingAllocator<U, CAPACITY2>&) {
+	return CAPACITY == CAPACITY2;
+}
+
+template <typename T, size_t CAPACITY, typename U, size_t CAPACITY2>
+inline bool operator!=(const LockfreePoolingAllocator<T, CAPACITY>&, const LockfreePoolingAllocator<U, CAPACITY2>&) {
+	return CAPACITY != CAPACITY2;
+}
 
 #endif

@@ -320,12 +320,12 @@ std::string formatDate(time_t time)
 		return {};
 	}
 
-	char buffer[20];
-	int res = sprintf(buffer, "%02d/%02d/%04d %02d:%02d:%02d", tms->tm_mday, tms->tm_mon + 1, tms->tm_year + 1900, tms->tm_hour, tms->tm_min, tms->tm_sec);
-	if (res < 0) {
+	char buffer[32];
+	size_t res = strftime(buffer, sizeof(buffer), "%d/%m/%Y %H:%M:%S", tms);
+	if (res == 0) {
 		return {};
 	}
-	return {buffer, 19};
+	return {buffer, res};
 }
 
 std::string formatDateShort(time_t time)
