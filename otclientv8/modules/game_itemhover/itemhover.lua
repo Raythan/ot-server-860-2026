@@ -55,17 +55,19 @@ local TOOLTIP_PAD_H = 20
 local TOOLTIP_PAD_TOP = 8
 local TOOLTIP_GAP = 8
 local TOOLTIP_PAD_BOTTOM = 12
+-- Altura inicial alta para o motor calcular corretamente a quebra de linha (evita sobreposição)
+local TOOLTIP_INIT_HEIGHT = 800
 
 local function showPopup(text)
   if not popupPanel or not titleLabel or not contentLabel or not text or text:len() == 0 then return end
   local title, content = splitTitleAndContent(text)
-  -- Largura fixa para o texto quebrar; altura 0 para resizeToText calcular a altura necessária
+  -- Largura fixa + altura inicial alta para resizeToText calcular a altura com wrap sem sobrepor linhas
   titleLabel:setWidth(TOOLTIP_TEXT_WIDTH)
-  titleLabel:setHeight(0)
+  titleLabel:setHeight(TOOLTIP_INIT_HEIGHT)
   titleLabel:setText(title)
   titleLabel:resizeToText()
   contentLabel:setWidth(TOOLTIP_TEXT_WIDTH)
-  contentLabel:setHeight(0)
+  contentLabel:setHeight(TOOLTIP_INIT_HEIGHT)
   contentLabel:setText(content)
   contentLabel:resizeToText()
   local th = titleLabel:getHeight()
@@ -86,8 +88,14 @@ local function showPopup(text)
   if ch > 0 then
     contentLabel:setHeight(contentH)
   end
-  titleLabel:setPosition(topoint('10 8'))
-  contentLabel:setPosition(topoint('10 ' .. contentY))
+  -- Centralizar horizontalmente: labels com largura TOOLTIP_TEXT_WIDTH no painel innerW
+  local leftX = math.floor((innerW - TOOLTIP_TEXT_WIDTH) / 2)
+  -- Centralizar verticalmente o bloco título + conteúdo no painel
+  local totalBlockH = th + TOOLTIP_GAP + (capped and contentH or ch)
+  local topY = math.floor((innerH - totalBlockH) / 2)
+  local contentYPos = topY + th + TOOLTIP_GAP
+  titleLabel:setPosition(topoint(leftX .. ' ' .. topY))
+  contentLabel:setPosition(topoint(leftX .. ' ' .. contentYPos))
   innerPanel:setWidth(innerW)
   innerPanel:setHeight(innerH)
   borderPanel:setWidth(innerW + 4)
@@ -209,7 +217,7 @@ function init()
   -- Título do tooltip (primeira linha do Look)
   titleLabel = g_ui.createWidget('UILabel', innerPanel)
   titleLabel:setId('itemHoverTitle')
-  titleLabel:setTextAlign(AlignLeft)
+  titleLabel:setTextAlign(AlignCenter)
   titleLabel:setTextWrap(true)
   titleLabel:setFont('verdana-11')
   titleLabel:setColor(TITLE_COLOR)
@@ -217,7 +225,7 @@ function init()
   -- Conteúdo (restante do texto)
   contentLabel = g_ui.createWidget('UILabel', innerPanel)
   contentLabel:setId('itemHoverContent')
-  contentLabel:setTextAlign(AlignLeft)
+  contentLabel:setTextAlign(AlignCenter)
   contentLabel:setTextWrap(true)
   contentLabel:setFont('verdana-11')
   contentLabel:setColor(CONTENT_COLOR)
