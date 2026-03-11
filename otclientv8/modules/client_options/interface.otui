@@ -193,3 +193,17 @@ OptionPanel
     id: floorFadingLabel2
     margin-top: 6
     !text: (tr('Floor fading doesn\'t work with enabled light'))
+
+  Label
+    id: itemHoverPopupOpacityLabel
+    margin-top: 12
+    @onSetup: |
+      local value = modules.client_options.getOption('itemHoverPopupOpacity')
+      if value == nil then value = 90 end
+      self:setText(tr('Item hover popup opacity: %s%%', value))
+
+  OptionScrollbar
+    id: itemHoverPopupOpacity
+    margin-top: 3
+    minimum: 0
+    maximum: 100

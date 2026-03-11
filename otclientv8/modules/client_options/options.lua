@@ -51,7 +51,9 @@ local defaultOptions = {
   walkCtrlTurnDelay = 150,
   
   actionBar1 = true,
-  actionBar2 = false
+  actionBar2 = false,
+
+  itemHoverPopupOpacity = 90
 }
 
 local optionsWindow
@@ -315,6 +317,11 @@ function setOption(key, value, force)
   elseif key == 'wsadWalking' then
     if modules.game_console and modules.game_console.consoleToggleChat:isChecked() ~= value then
       modules.game_console.consoleToggleChat:setChecked(value)
+    end
+  elseif key == 'itemHoverPopupOpacity' then
+    interfacePanel:getChildById('itemHoverPopupOpacityLabel'):setText(tr('Item hover popup opacity: %s%%', value))
+    if modules.game_itemhover and modules.game_itemhover.applyItemPopupOpacity then
+      modules.game_itemhover.applyItemPopupOpacity()
     end
   elseif key == 'hotkeyDelay' then
     generalPanel:getChildById('hotkeyDelayLabel'):setText(tr('Hotkey delay: %s ms', value))  
