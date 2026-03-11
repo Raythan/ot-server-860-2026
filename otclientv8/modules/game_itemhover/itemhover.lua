@@ -68,28 +68,25 @@ function applyItemPopupOpacity()
 end
 
 local function onLookMessage(mode, text)
-  if mode ~= MessageModes.Look and mode ~= MessageModes.Game and mode ~= MessageModes.Status then return end
-  if not pendingHoverLook then return end
-  if pendingHoverDeadline > 0 and g_clock.millis() > pendingHoverDeadline then
+  if mode ~= MessageModes.Look then return false end
+
+  local now = g_clock.millis()
+
+  if not pendingHoverLook then return false end
+  if pendingHoverDeadline > 0 and now > pendingHoverDeadline then
     pendingHoverLook = false
     pendingHoverDeadline = 0
-    return
+    return false
   end
   pendingHoverLook = false
   pendingHoverDeadline = 0
-  showItemPopup(text)
+  if currentHoverWidget then
+    showItemPopup(text)
+  end
+  return true
 end
 
-local function doHoverLook()
-  hoverSchedule = nil
-  if not currentHoverWidget then return end
-  local item = currentHoverWidget:getItem()
-  if not item or not item:isItem() then return end
-  if not g_game.isOnline() then return end
-  pendingHoverLook = true
-  pendingHoverDeadline = g_clock.millis() + 1500
-  g_game.look(item)
-
+local function startHoverFallback()
   if hoverFallbackSchedule then
     removeEvent(hoverFallbackSchedule)
     hoverFallbackSchedule = nil
@@ -103,11 +100,28 @@ local function doHoverLook()
     if not fallbackItem or not fallbackItem:isItem() then return end
     local tooltip = fallbackItem:getTooltip()
     if tooltip and tooltip:len() > 0 then
-      pendingHoverLook = false
-      pendingHoverDeadline = 0
       showItemPopup(tooltip)
     end
   end, 250)
+end
+
+local function stopHoverFallback()
+  if hoverFallbackSchedule then
+    removeEvent(hoverFallbackSchedule)
+    hoverFallbackSchedule = nil
+  end
+end
+
+local function doHoverLook()
+  hoverSchedule = nil
+  if not currentHoverWidget then return end
+  local item = currentHoverWidget:getItem()
+  if not item or not item:isItem() then return end
+  if not g_game.isOnline() then return end
+  pendingHoverLook = true
+  pendingHoverDeadline = g_clock.millis() + 1500
+  g_game.look(item)
+  startHoverFallback()
 end
 
 local function cancelHover()
@@ -115,10 +129,7 @@ local function cancelHover()
     removeEvent(hoverSchedule)
     hoverSchedule = nil
   end
-  if hoverFallbackSchedule then
-    removeEvent(hoverFallbackSchedule)
-    hoverFallbackSchedule = nil
-  end
+  stopHoverFallback()
   currentHoverWidget = nil
   if pendingHoverLook then
     pendingHoverLook = false
@@ -146,9 +157,7 @@ function onItemHoverChange(widget, hovered)
 end
 
 function init()
-  registerMessageMode(MessageModes.Look, onLookMessage)
-  registerMessageMode(MessageModes.Game, onLookMessage)
-  registerMessageMode(MessageModes.Status, onLookMessage)
+  registerMessageMode(MessageModes.Look, onLookMessage, true)
 
   popupPanel = g_ui.createWidget('Panel', rootWidget)
   popupPanel:setId('itemHoverPopup')
@@ -171,8 +180,6 @@ end
 function terminate()
   cancelHover()
   unregisterMessageMode(MessageModes.Look, onLookMessage)
-  unregisterMessageMode(MessageModes.Game, onLookMessage)
-  unregisterMessageMode(MessageModes.Status, onLookMessage)
   if popupPanel then
     popupPanel:destroy()
     popupPanel = nil

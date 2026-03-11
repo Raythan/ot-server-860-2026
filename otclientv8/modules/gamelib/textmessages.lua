@@ -8,16 +8,22 @@ function g_game.onTextMessage(messageMode, message)
   end
 
   for _, callback in pairs(callbacks) do
-    callback(messageMode, message)
+    if callback(messageMode, message) then
+      return
+    end
   end
 end
 
-function registerMessageMode(messageMode, callback)
+function registerMessageMode(messageMode, callback, first)
   if not messageModeCallbacks[messageMode] then
     messageModeCallbacks[messageMode] = {}
   end
 
-  table.insert(messageModeCallbacks[messageMode], callback)
+  if first then
+    table.insert(messageModeCallbacks[messageMode], 1, callback)
+  else
+    table.insert(messageModeCallbacks[messageMode], callback)
+  end
   return true
 end
 
