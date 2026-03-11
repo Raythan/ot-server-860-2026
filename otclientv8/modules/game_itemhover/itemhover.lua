@@ -1,43 +1,37 @@
--- Item hover popup: shows the same description as Shift+click (Look) when hovering items in inventory/containers.
--- Opacity is configurable in Options > Interface.
+-- Item hover: ao parar o mouse em cima de um item (slot ou container), abre um
+-- balão com os mesmos detalhes do Look. Ao tirar o foco do item, o popup fecha.
+-- Look manual (Shift+clique) continua igual: Server Log + texto verde na tela.
 
-local hoverDelayMs = 550
-local pendingHoverLook = false
-local pendingHoverDeadline = 0
-local hoverSchedule = nil
-local hoverFallbackSchedule = nil
-local currentHoverWidget = nil
-local popupPanel = nil
-local popupLabel = nil
+local HOVER_DELAY_MS = 500
+local LOOK_TIMEOUT_MS = 2000
 
-local function getPopupOpacity()
-  local pct = 90
-  if modules.client_options then
-    pct = modules.client_options.getOption('itemHoverPopupOpacity')
-    if pct == nil then pct = 90 end
-  end
-  return math.max(0, math.min(100, pct)) / 100
+local popupPanel
+local popupLabel
+local hoverTimer
+local currentItemWidget
+local waitingForLookFromHover = false
+local lookWaitDeadline = 0
+
+local function hidePopup()
+  if not popupPanel then return end
+  disconnect(rootWidget, { onMouseMove = movePopup })
+  popupPanel:hide()
 end
 
 local function movePopup()
   if not popupPanel or not popupPanel:isVisible() then return end
   local pos = g_window.getMousePosition()
-  local windowSize = g_window.getSize()
-  local size = popupPanel:getSize()
-  pos.x = pos.x + 12
-  pos.y = pos.y + 12
-  if windowSize.width - (pos.x + size.width) < 10 then
-    pos.x = pos.x - size.width - 16
-  end
-  if windowSize.height - (pos.y + size.height) < 10 then
-    pos.y = pos.y - size.height - 16
-  end
+  local sz = popupPanel:getSize()
+  local win = g_window.getSize()
+  pos.x = pos.x + 14
+  pos.y = pos.y + 14
+  if pos.x + sz.width > win.width - 10 then pos.x = pos.x - sz.width - 20 end
+  if pos.y + sz.height > win.height - 10 then pos.y = pos.y - sz.height - 20 end
   popupPanel:setPosition(pos)
 end
 
-function showItemPopup(text)
-  if not popupPanel or not popupLabel then return end
-  if not text or text:len() == 0 then return end
+local function showPopup(text)
+  if not popupPanel or not popupLabel or not text or text:len() == 0 then return end
   popupLabel:setText(text)
   popupLabel:setWidth(380)
   popupLabel:setHeight(0)
@@ -46,122 +40,102 @@ function showItemPopup(text)
   local lh = popupLabel:getHeight()
   local w = math.min(lw + 14, 400)
   local h = math.min(lh + 10, 300)
-  popupPanel:setSize(w, h)
+  popupPanel:setWidth(w)
+  popupPanel:setHeight(h)
   popupLabel:setPosition(7, 5)
-  popupPanel:setOpacity(getPopupOpacity())
+  if modules.client_options then
+    local pct = modules.client_options.getOption('itemHoverPopupOpacity')
+    if pct == nil then pct = 90 end
+    popupPanel:setOpacity(math.max(0, math.min(100, pct)) / 100)
+  else
+    popupPanel:setOpacity(0.9)
+  end
   popupPanel:show()
   popupPanel:raise()
   movePopup()
   connect(rootWidget, { onMouseMove = movePopup })
 end
 
-function hideItemPopup()
-  if not popupPanel then return end
-  disconnect(rootWidget, { onMouseMove = movePopup })
-  popupPanel:hide()
-end
-
 function applyItemPopupOpacity()
-  if popupPanel and popupPanel:isVisible() then
-    popupPanel:setOpacity(getPopupOpacity())
+  if popupPanel and popupPanel:isVisible() and modules.client_options then
+    local pct = modules.client_options.getOption('itemHoverPopupOpacity')
+    if pct == nil then pct = 90 end
+    popupPanel:setOpacity(math.max(0, math.min(100, pct)) / 100)
   end
 end
 
-local function onLookMessage(mode, text)
-  if mode ~= MessageModes.Look then return false end
-
-  local now = g_clock.millis()
-
-  if not pendingHoverLook then return false end
-  if pendingHoverDeadline > 0 and now > pendingHoverDeadline then
-    pendingHoverLook = false
-    pendingHoverDeadline = 0
+-- Callback do servidor: mensagem Look. Só consumimos se foi nosso hover que pediu.
+local function onLook(messageMode, text)
+  if messageMode ~= MessageModes.Look then return false end
+  if not waitingForLookFromHover then return false end
+  if g_clock.millis() > lookWaitDeadline then
+    waitingForLookFromHover = false
     return false
   end
-  pendingHoverLook = false
-  pendingHoverDeadline = 0
-  if currentHoverWidget then
-    showItemPopup(text)
+  waitingForLookFromHover = false
+  if currentItemWidget then
+    showPopup(text)
   end
   return true
 end
 
-local function startHoverFallback()
-  if hoverFallbackSchedule then
-    removeEvent(hoverFallbackSchedule)
-    hoverFallbackSchedule = nil
+local function cancelHover()
+  if hoverTimer then
+    removeEvent(hoverTimer)
+    hoverTimer = nil
   end
-
-  hoverFallbackSchedule = scheduleEvent(function()
-    hoverFallbackSchedule = nil
-    if not pendingHoverLook then return end
-    if not currentHoverWidget then return end
-    local fallbackItem = currentHoverWidget:getItem()
-    if not fallbackItem or not fallbackItem:isItem() then return end
-    local tooltip = fallbackItem:getTooltip()
-    if tooltip and tooltip:len() > 0 then
-      showItemPopup(tooltip)
-    end
-  end, 250)
-end
-
-local function stopHoverFallback()
-  if hoverFallbackSchedule then
-    removeEvent(hoverFallbackSchedule)
-    hoverFallbackSchedule = nil
-  end
+  currentItemWidget = nil
+  waitingForLookFromHover = false
+  lookWaitDeadline = 0
+  hidePopup()
 end
 
 local function doHoverLook()
-  hoverSchedule = nil
-  if not currentHoverWidget then return end
-  local item = currentHoverWidget:getItem()
+  hoverTimer = nil
+  if not currentItemWidget then return end
+  local item = currentItemWidget:getItem()
   if not item or not item:isItem() then return end
   if not g_game.isOnline() then return end
-  pendingHoverLook = true
-  pendingHoverDeadline = g_clock.millis() + 1500
+  waitingForLookFromHover = true
+  lookWaitDeadline = g_clock.millis() + LOOK_TIMEOUT_MS
   g_game.look(item)
-  startHoverFallback()
-end
-
-local function cancelHover()
-  if hoverSchedule then
-    removeEvent(hoverSchedule)
-    hoverSchedule = nil
-  end
-  stopHoverFallback()
-  currentHoverWidget = nil
-  if pendingHoverLook then
-    pendingHoverLook = false
-  end
-  pendingHoverDeadline = 0
-  hideItemPopup()
+  -- Fallback: se o servidor demorar, mostrar tooltip do item se existir
+  scheduleEvent(function()
+    if not waitingForLookFromHover or not currentItemWidget then return end
+    local fallbackItem = currentItemWidget:getItem()
+    if not fallbackItem or not fallbackItem:isItem() then return end
+    local tip = fallbackItem:getTooltip()
+    if tip and tip:len() > 0 then
+      waitingForLookFromHover = false
+      lookWaitDeadline = 0
+      showPopup(tip)
+    end
+  end, 300)
 end
 
 function onItemHoverChange(widget, hovered)
   if hovered then
-    if not widget then return end
-    if widget:getClassName() ~= 'UIItem' then return end
+    if not widget or widget:getClassName() ~= 'UIItem' then return end
     if widget:isVirtual() then return end
     local item = widget:getItem()
     if not item or not item:isItem() then return end
     if g_mouse.isPressed() then return end
-    currentHoverWidget = widget
-    if hoverSchedule then removeEvent(hoverSchedule) end
-    hoverSchedule = scheduleEvent(doHoverLook, hoverDelayMs)
+    currentItemWidget = widget
+    if hoverTimer then removeEvent(hoverTimer) end
+    hoverTimer = scheduleEvent(doHoverLook, HOVER_DELAY_MS)
   else
-    if widget == currentHoverWidget then
+    if widget == currentItemWidget then
       cancelHover()
     end
   end
 end
 
 function init()
-  registerMessageMode(MessageModes.Look, onLookMessage, true)
+  registerMessageMode(MessageModes.Look, onLook, true)
 
   popupPanel = g_ui.createWidget('Panel', rootWidget)
   popupPanel:setId('itemHoverPopup')
-  popupPanel:setBackgroundColor('#111111')
+  popupPanel:setBackgroundColor('#1a1a1a')
   popupPanel:setVisible(false)
   popupPanel:setPhantom(true)
   popupPanel:setFocusable(false)
@@ -171,7 +145,7 @@ function init()
   popupLabel:setTextAlign(AlignLeft)
   popupLabel:setTextWrap(true)
   popupLabel:setFont('verdana-11')
-  popupLabel:setColor('#00ff00')
+  popupLabel:setColor('#b0ffb0')
   popupLabel:setMargin(7, 5)
   popupLabel:setWidth(380)
   popupLabel:setHeight(0)
@@ -179,7 +153,7 @@ end
 
 function terminate()
   cancelHover()
-  unregisterMessageMode(MessageModes.Look, onLookMessage)
+  unregisterMessageMode(MessageModes.Look, onLook)
   if popupPanel then
     popupPanel:destroy()
     popupPanel = nil
