@@ -37,7 +37,8 @@ function showItemPopup(text)
   if not popupPanel or not popupLabel then return end
   if not text or text:len() == 0 then return end
   popupLabel:setText(text)
-  popupLabel:setSize(380, 0)
+  popupLabel:setWidth(380)
+  popupLabel:setHeight(0)
   popupLabel:resizeToText()
   local lw = popupLabel:getWidth()
   local lh = popupLabel:getHeight()
@@ -128,7 +129,8 @@ function init()
   popupLabel:setFont('verdana-11')
   popupLabel:setColor('#00ff00')
   popupLabel:setMargin(7, 5)
-  popupLabel:setSize(380, 0)
+  popupLabel:setWidth(380)
+  popupLabel:setHeight(0)
 end
 
 function terminate()
