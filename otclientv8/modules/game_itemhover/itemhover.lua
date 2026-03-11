@@ -48,26 +48,46 @@ local function splitTitleAndContent(text)
   return firstLine, rest
 end
 
+-- Largura fixa do texto para quebra de linha consistente; altura máxima do tooltip
+local TOOLTIP_TEXT_WIDTH = 340
+local TOOLTIP_MAX_HEIGHT = 420
+local TOOLTIP_PAD_H = 20
+local TOOLTIP_PAD_TOP = 8
+local TOOLTIP_GAP = 8
+local TOOLTIP_PAD_BOTTOM = 12
+
 local function showPopup(text)
   if not popupPanel or not titleLabel or not contentLabel or not text or text:len() == 0 then return end
   local title, content = splitTitleAndContent(text)
-  titleLabel:setText(title)
-  titleLabel:setWidth(360)
+  -- Largura fixa para o texto quebrar; altura 0 para resizeToText calcular a altura necessária
+  titleLabel:setWidth(TOOLTIP_TEXT_WIDTH)
   titleLabel:setHeight(0)
+  titleLabel:setText(title)
   titleLabel:resizeToText()
-  contentLabel:setText(content)
-  contentLabel:setWidth(360)
+  contentLabel:setWidth(TOOLTIP_TEXT_WIDTH)
   contentLabel:setHeight(0)
+  contentLabel:setText(content)
   contentLabel:resizeToText()
-  local tw, th = titleLabel:getWidth(), titleLabel:getHeight()
-  local cw, ch = contentLabel:getWidth(), contentLabel:getHeight()
-  local padH, padV = 14, 10
-  local innerW = math.max(tw, cw) + padH
-  local innerH = th + (ch > 0 and (4 + ch) or 0) + padV
-  innerW = math.min(innerW, 400)
-  innerH = math.min(innerH, 320)
+  local th = titleLabel:getHeight()
+  local ch = contentLabel:getHeight()
+  -- Dimensões do conteúdo: largura fixa + padding; altura = título + espaço + conteúdo + paddings
+  local innerW = TOOLTIP_TEXT_WIDTH + TOOLTIP_PAD_H
+  local innerH = TOOLTIP_PAD_TOP + th + TOOLTIP_GAP + ch + TOOLTIP_PAD_BOTTOM
+  local capped = innerH > TOOLTIP_MAX_HEIGHT
+  if capped then
+    innerH = TOOLTIP_MAX_HEIGHT
+  end
+  local contentY = TOOLTIP_PAD_TOP + th + TOOLTIP_GAP
+  local contentH = ch
+  if capped then
+    local availableH = innerH - contentY - TOOLTIP_PAD_BOTTOM
+    contentH = math.max(0, availableH)
+  end
+  if ch > 0 then
+    contentLabel:setHeight(contentH)
+  end
   titleLabel:setPosition(topoint('10 8'))
-  contentLabel:setPosition(topoint('10 ' .. (th + 12)))
+  contentLabel:setPosition(topoint('10 ' .. contentY))
   innerPanel:setWidth(innerW)
   innerPanel:setHeight(innerH)
   borderPanel:setWidth(innerW + 4)

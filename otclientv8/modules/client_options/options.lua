@@ -319,7 +319,7 @@ function setOption(key, value, force)
       modules.game_console.consoleToggleChat:setChecked(value)
     end
   elseif key == 'itemHoverPopupOpacity' then
-    interfacePanel:getChildById('itemHoverPopupOpacityLabel'):setText(tr('Item tooltip opacity (0-100): %s%%', value))
+    interfacePanel:getChildById('itemHoverPopupOpacityLabel'):setText(tr('Tooltip opacity: %s%%', value))
     if modules.game_itemhover and modules.game_itemhover.applyItemPopupOpacity then
       modules.game_itemhover.applyItemPopupOpacity()
     end
