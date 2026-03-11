@@ -1,12 +1,22 @@
--- Item hover: ao parar o mouse em cima de um item (slot ou container), abre um
--- balão com os mesmos detalhes do Look. Ao tirar o foco do item, o popup fecha.
+-- Item hover: ao parar o mouse em cima de um item (slot de equipamento ou container),
+-- abre um tooltip com os detalhes do Look. Opacidade configurável em Opções (0%% a 100%%).
 -- Look manual (Shift+clique) continua igual: Server Log + texto verde na tela.
 
 local HOVER_DELAY_MS = 500
 local LOOK_TIMEOUT_MS = 2000
 
-local popupPanel
-local popupLabel
+-- Cores no estilo do esboço: borda externa azul escura, borda interna azul/roxo, fundo semi-transparente
+local BORDER_OUTER_COLOR = '#1e3a5f'
+local BORDER_INNER_COLOR = '#3d5a80'
+local BACKGROUND_COLOR = '#2a2a4acc'  -- azul/roxo com alpha
+local TITLE_COLOR = '#ffffff'
+local CONTENT_COLOR = '#e0e0ff'
+
+local popupPanel       -- painel raiz (opacidade aplicada aqui)
+local borderPanel      -- borda dupla (outer + inner)
+local innerPanel       -- fundo do conteúdo
+local titleLabel
+local contentLabel
 local hoverTimer
 local currentItemWidget
 local waitingForLookFromHover = false
@@ -30,19 +40,41 @@ local function movePopup()
   popupPanel:setPosition(pos)
 end
 
+-- Extrai título (primeira linha) e corpo do texto do Look.
+local function splitTitleAndContent(text)
+  if not text or text:len() == 0 then return '', '' end
+  local firstLine = text:match('^([^\r\n]+)') or text
+  local rest = text:match('^[^\r\n]+\r?\n(.+)$') or ''
+  return firstLine, rest
+end
+
 local function showPopup(text)
-  if not popupPanel or not popupLabel or not text or text:len() == 0 then return end
-  popupLabel:setText(text)
-  popupLabel:setWidth(380)
-  popupLabel:setHeight(0)
-  popupLabel:resizeToText()
-  local lw = popupLabel:getWidth()
-  local lh = popupLabel:getHeight()
-  local w = math.min(lw + 14, 400)
-  local h = math.min(lh + 10, 300)
-  popupPanel:setWidth(w)
-  popupPanel:setHeight(h)
-  popupLabel:setPosition(7, 5)
+  if not popupPanel or not titleLabel or not contentLabel or not text or text:len() == 0 then return end
+  local title, content = splitTitleAndContent(text)
+  titleLabel:setText(title)
+  titleLabel:setWidth(360)
+  titleLabel:setHeight(0)
+  titleLabel:resizeToText()
+  contentLabel:setText(content)
+  contentLabel:setWidth(360)
+  contentLabel:setHeight(0)
+  contentLabel:resizeToText()
+  local tw, th = titleLabel:getWidth(), titleLabel:getHeight()
+  local cw, ch = contentLabel:getWidth(), contentLabel:getHeight()
+  local padH, padV = 14, 10
+  local innerW = math.max(tw, cw) + padH
+  local innerH = th + (ch > 0 and (4 + ch) or 0) + padV
+  innerW = math.min(innerW, 400)
+  innerH = math.min(innerH, 320)
+  titleLabel:setPosition(10, 8)
+  contentLabel:setPosition(10, th + 12)
+  innerPanel:setWidth(innerW)
+  innerPanel:setHeight(innerH)
+  borderPanel:setWidth(innerW + 4)
+  borderPanel:setHeight(innerH + 4)
+  borderPanel:setPosition(2, 2)
+  popupPanel:setWidth(innerW + 8)
+  popupPanel:setHeight(innerH + 8)
   if modules.client_options then
     local pct = modules.client_options.getOption('itemHoverPopupOpacity')
     if pct == nil then pct = 90 end
@@ -133,22 +165,42 @@ end
 function init()
   registerMessageMode(MessageModes.Look, onLook, true)
 
+  -- Painel raiz: opacidade 0–100% aplicada aqui
   popupPanel = g_ui.createWidget('Panel', rootWidget)
   popupPanel:setId('itemHoverPopup')
-  popupPanel:setBackgroundColor('#1a1a1a')
+  popupPanel:setBackgroundColor('#00000000')
   popupPanel:setVisible(false)
   popupPanel:setPhantom(true)
   popupPanel:setFocusable(false)
 
-  popupLabel = g_ui.createWidget('UILabel', popupPanel)
-  popupLabel:setId('itemHoverPopupLabel')
-  popupLabel:setTextAlign(AlignLeft)
-  popupLabel:setTextWrap(true)
-  popupLabel:setFont('verdana-11')
-  popupLabel:setColor('#b0ffb0')
-  popupLabel:setMargin(7, 5)
-  popupLabel:setWidth(380)
-  popupLabel:setHeight(0)
+  -- Borda externa (azul escuro), efeito de “moldura”
+  borderPanel = g_ui.createWidget('Panel', popupPanel)
+  borderPanel:setId('itemHoverBorder')
+  borderPanel:setBackgroundColor(BORDER_OUTER_COLOR)
+  borderPanel:setBorderWidth(2)
+  borderPanel:setBorderColor(BORDER_INNER_COLOR)
+
+  -- Área interna: fundo azul/roxo semi-transparente
+  innerPanel = g_ui.createWidget('Panel', borderPanel)
+  innerPanel:setId('itemHoverInner')
+  innerPanel:setBackgroundColor(BACKGROUND_COLOR)
+  innerPanel:setPosition(2, 2)
+
+  -- Título do tooltip (primeira linha do Look)
+  titleLabel = g_ui.createWidget('UILabel', innerPanel)
+  titleLabel:setId('itemHoverTitle')
+  titleLabel:setTextAlign(AlignLeft)
+  titleLabel:setTextWrap(true)
+  titleLabel:setFont('verdana-11')
+  titleLabel:setColor(TITLE_COLOR)
+
+  -- Conteúdo (restante do texto)
+  contentLabel = g_ui.createWidget('UILabel', innerPanel)
+  contentLabel:setId('itemHoverContent')
+  contentLabel:setTextAlign(AlignLeft)
+  contentLabel:setTextWrap(true)
+  contentLabel:setFont('verdana-11')
+  contentLabel:setColor(CONTENT_COLOR)
 end
 
 function terminate()
@@ -157,6 +209,9 @@ function terminate()
   if popupPanel then
     popupPanel:destroy()
     popupPanel = nil
-    popupLabel = nil
   end
+  borderPanel = nil
+  innerPanel = nil
+  titleLabel = nil
+  contentLabel = nil
 end

@@ -200,7 +200,7 @@ OptionPanel
     @onSetup: |
       local value = modules.client_options.getOption('itemHoverPopupOpacity')
       if value == nil then value = 90 end
-      self:setText(tr('Item hover popup opacity: %s%%', value))
+      self:setText(tr('Item tooltip opacity (0-100): %s%%', value))
 
   OptionScrollbar
     id: itemHoverPopupOpacity
