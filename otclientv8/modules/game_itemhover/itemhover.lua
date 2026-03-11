@@ -61,39 +61,52 @@ local TOOLTIP_INIT_HEIGHT = 800
 local function showPopup(text)
   if not popupPanel or not titleLabel or not contentLabel or not text or text:len() == 0 then return end
   local title, content = splitTitleAndContent(text)
-  -- Largura fixa + altura inicial alta para resizeToText calcular a altura com wrap sem sobrepor linhas
+  local hasContent = content and content:len() > 0
+
+  -- Fixed width; tall initial height so the engine wraps text correctly for getTextSize()
   titleLabel:setWidth(TOOLTIP_TEXT_WIDTH)
   titleLabel:setHeight(TOOLTIP_INIT_HEIGHT)
   titleLabel:setText(title)
-  titleLabel:resizeToText()
-  contentLabel:setWidth(TOOLTIP_TEXT_WIDTH)
-  contentLabel:setHeight(TOOLTIP_INIT_HEIGHT)
-  contentLabel:setText(content)
-  contentLabel:resizeToText()
-  local th = titleLabel:getHeight()
-  local ch = contentLabel:getHeight()
-  -- Fixar altura dos labels ao valor calculado para evitar sobreposição (não deixar em 800px)
+  local th = math.max(1, titleLabel:getTextSize().height)
   titleLabel:setHeight(th)
+
+  local ch = 0
+  if hasContent then
+    contentLabel:setWidth(TOOLTIP_TEXT_WIDTH)
+    contentLabel:setHeight(TOOLTIP_INIT_HEIGHT)
+    contentLabel:setText(content)
+    ch = math.max(1, contentLabel:getTextSize().height)
+    contentLabel:setHeight(ch)
+    contentLabel:setVisible(true)
+  else
+    contentLabel:setText('')
+    contentLabel:setHeight(0)
+    contentLabel:setVisible(false)
+  end
+
   local contentH = ch
-  -- Dimensões do conteúdo: largura fixa + padding; altura = título + espaço + conteúdo + paddings (caixa ao tamanho do texto)
+  local gap = hasContent and TOOLTIP_GAP or 0
   local innerW = TOOLTIP_TEXT_WIDTH + TOOLTIP_PAD_H
-  local innerH = TOOLTIP_PAD_TOP + th + TOOLTIP_GAP + ch + TOOLTIP_PAD_BOTTOM
+  local innerH = TOOLTIP_PAD_TOP + th + gap + ch + TOOLTIP_PAD_BOTTOM
   local capped = innerH > TOOLTIP_MAX_HEIGHT
   if capped then
     innerH = TOOLTIP_MAX_HEIGHT
-    local contentY = TOOLTIP_PAD_TOP + th + TOOLTIP_GAP
+    local contentY = TOOLTIP_PAD_TOP + th + gap
     local availableH = innerH - contentY - TOOLTIP_PAD_BOTTOM
     contentH = math.max(0, availableH)
+    contentLabel:setHeight(contentH)
   end
-  contentLabel:setHeight(contentH)
-  -- Centralizar horizontalmente: labels com largura TOOLTIP_TEXT_WIDTH no painel innerW
+
   local leftX = math.floor((innerW - TOOLTIP_TEXT_WIDTH) / 2)
-  -- Centralizar verticalmente o bloco título + conteúdo no painel (evitar topY negativo quando capped)
-  local totalBlockH = th + TOOLTIP_GAP + contentH
+  local totalBlockH = th + gap + contentH
   local topY = math.max(0, math.floor((innerH - totalBlockH) / 2))
-  local contentYPos = topY + th + TOOLTIP_GAP
+  local contentYPos = topY + th + gap
+
   titleLabel:setPosition(topoint(leftX .. ' ' .. topY))
-  contentLabel:setPosition(topoint(leftX .. ' ' .. contentYPos))
+  if hasContent then
+    contentLabel:setPosition(topoint(leftX .. ' ' .. contentYPos))
+  end
+
   innerPanel:setWidth(innerW)
   innerPanel:setHeight(innerH)
   borderPanel:setWidth(innerW + 4)
@@ -211,12 +224,14 @@ function init()
   innerPanel:setId('itemHoverInner')
   innerPanel:setBackgroundColor(BACKGROUND_COLOR)
   innerPanel:setPosition(topoint('2 2'))
+  innerPanel:setClipping(true)
 
   -- Título do tooltip (primeira linha do Look)
   titleLabel = g_ui.createWidget('UILabel', innerPanel)
   titleLabel:setId('itemHoverTitle')
   titleLabel:setTextAlign(AlignCenter)
   titleLabel:setTextWrap(true)
+  titleLabel:setTextAutoResize(false)
   titleLabel:setFont('verdana-11')
   titleLabel:setColor(TITLE_COLOR)
 
@@ -225,6 +240,7 @@ function init()
   contentLabel:setId('itemHoverContent')
   contentLabel:setTextAlign(AlignCenter)
   contentLabel:setTextWrap(true)
+  contentLabel:setTextAutoResize(false)
   contentLabel:setFont('verdana-11')
   contentLabel:setColor(CONTENT_COLOR)
 end
