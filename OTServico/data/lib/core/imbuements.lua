@@ -4,6 +4,9 @@ MESSAGEDIALOG_IMBUING_STATION_NOT_FOUND = 3
 MESSAGEDIALOG_CLEARING_CHARM_SUCCESS = 10
 MESSAGEDIALOG_CLEARING_CHARM_ERROR = 11
 
+-- Custom attribute keys for imbuement slots (slot 0 -> IMBUEMENT_SLOT+0, etc.)
+IMBUEMENT_SLOT = 1
+
 -- tables
 Imbuements_Weapons = {
 	["armor"] = {21692, 2500, 2656, 2464, 2487, 2494, 2492, 2503, 12607, 2505, 32419, 2466, 23538, 10296, 2476, 3968, 2472, 7463, 8888, 23537, 2486, 15406, 8891, 18404}, -- ok
@@ -148,6 +151,143 @@ function Player.closeImbuementWindow(self)
 	local msg = NetworkMessage()
 	msg:addByte(0xEC)
 	msg:sendToPlayer(self)
+	msg:delete()
+end
+
+-- Returns number of imbuement slots (0-3) for an item by id. Use when ItemType:getImbuingSlots() is not available.
+function getImbuingSlotsForItem(itemId)
+	for _, list in pairs(Imbuements_Weapons) do
+		if isInArray(list, itemId) then
+			return 3
+		end
+	end
+	return 0
+end
+
+-- Safe slot count: tries engine ItemType:getImbuingSlots(), then getImbuingSlotsForItem. Pass item id (number).
+function getItemImbuingSlots(itemId)
+	local ok, n = pcall(function()
+		local it = ItemType(itemId)
+		return it and it.getImbuingSlots and it:getImbuingSlots() or nil
+	end)
+	if ok and n and n > 0 then
+		return math.min(3, n)
+	end
+	return getImbuingSlotsForItem(itemId)
+end
+
+-- Sends the imbuement panel (open window) to the player for the given item.
+-- Item must be in player's inventory/equipment and imbuable. Call only in Protection Zone.
+function Player.sendImbuementPanel(self, item)
+	if not item or not item:getId() then return false end
+	local itemId = item:getId()
+	local slots = getItemImbuingSlots(itemId)
+	if slots == 0 then return false end
+
+	local activeSlots = {}
+	for slot = 0, slots - 1 do
+		local duration = item:getImbuementDuration(slot)
+		local imbue = item:getImbuement(slot)
+		if duration and duration > 0 and imbue then
+			local base = imbue:getBase()
+			activeSlots[slot] = {
+				name = imbue:getName() .. (base.subgroup or ""),
+				group = imbue:getCategory() and imbue:getCategory().name or "",
+				description = imbue:getDescription() or "",
+				duration = duration,
+				clearCost = base.removecost or 15000
+			}
+		end
+	end
+
+	local imbuementsList = {}
+	for id = 1, 255 do
+		local imb = Imbuement(id)
+		if imb and self:canBeAppliedImbuement(imb, item) then
+			local base = imb:getBase()
+			local sources = {}
+			for _, pid in pairs(imb:getItems()) do
+				table.insert(sources, {
+					item = ItemType(pid.itemid),
+					description = ItemType(pid.itemid):getName() .. " x" .. pid.count,
+					count = pid.count
+				})
+			end
+			table.insert(imbuementsList, {
+				id = id,
+				name = imb:getName() .. (base.subgroup or ""),
+				group = imb:getCategory() and imb:getCategory().name or "Elemental Damage",
+				cost = base.price or 5000,
+				protectionCost = base.protection or 10000,
+				successRate = base.percent or 100,
+				description = imb:getDescription() or "",
+				sources = sources
+			})
+		end
+	end
+
+	local needItems = {}
+	local inv = self:getSlotItem(CONST_SLOT_BACKPACK)
+	if inv and inv:isContainer() then
+		for slot = 0, inv:getCapacity() - 1 do
+			local thing = inv:getItem(slot)
+			if thing then
+				if thing:isContainer() then
+					for s2 = 0, thing:getCapacity() - 1 do
+						local sub = thing:getItem(s2)
+						if sub then table.insert(needItems, sub) end
+					end
+				else
+					table.insert(needItems, thing)
+				end
+			end
+		end
+	end
+	for _, slot in pairs({CONST_SLOT_HEAD, CONST_SLOT_NECKLACE, CONST_SLOT_BACKPACK, CONST_SLOT_ARMOR, CONST_SLOT_RIGHT, CONST_SLOT_LEFT, CONST_SLOT_LEGS, CONST_SLOT_FEET, CONST_SLOT_RING, CONST_SLOT_AMMO}) do
+		local it = self:getSlotItem(slot)
+		if it then table.insert(needItems, it) end
+	end
+
+	local msg = NetworkMessage()
+	msg:addByte(0xEB)
+	msg:addU16(itemId)
+	msg:addByte(slots)
+	for slot = 0, slots - 1 do
+		local a = activeSlots[slot]
+		if a then
+			local imb = item:getImbuement(slot)
+			msg:addU16(imb and imb:getId() or 0)
+			msg:addU32(a.duration or 0)
+			msg:addU32(a.clearCost or 15000)
+		else
+			msg:addU16(0)
+			msg:addU32(0)
+			msg:addU32(0)
+		end
+	end
+	msg:addU16(#imbuementsList)
+	for _, imb in ipairs(imbuementsList) do
+		msg:addU16(imb.id)
+		msg:addString(imb.name)
+		msg:addString(imb.group)
+		msg:addU32(imb.cost)
+		msg:addU32(imb.protectionCost)
+		msg:addByte(imb.successRate)
+		msg:addString(imb.description or "")
+		msg:addByte(#imb.sources)
+		for _, src in ipairs(imb.sources) do
+			msg:addU16(src.item and src.item:getId() or 0)
+			msg:addU16(src.count or 0)
+		end
+	end
+	msg:addByte(#needItems)
+	for _, needItem in ipairs(needItems) do
+		msg:addU16(needItem:getId())
+		msg:addByte(needItem:getCount())
+	end
+	msg:sendToPlayer(self)
+	msg:delete()
+	return true
 end
 
 -- Items functions

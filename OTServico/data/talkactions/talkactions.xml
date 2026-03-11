@@ -73,6 +73,7 @@
 	<talkaction words="!shovel" script="shovel.lua" />
 	<talkaction words="!rope" script="rope.lua" />
 	<talkaction words="!pz" script="pz.lua" />
+	<talkaction words="!imbue" separator=" " script="imbue.lua" />
 	
 		<!-- Anti-Entrosa -->
 	<talkaction words="/war" separator=" " script="warPrivate_talkactions.lua" />

@@ -12,6 +12,13 @@ local imbueItems = {}
 local protection = false
 local clearConfirmWindow
 local imbueConfirmWindow
+local imbueButton = nil
+
+local function openImbueFromClient()
+  if not g_game.isOnline() then return end
+  -- Request server to open imbuement panel (only works in Protection Zone; server enforces)
+  g_game.talk("!imbue")
+end
 
 function init()
   connect(g_game, {
@@ -20,6 +27,12 @@ function init()
     onImbuementWindow = onImbuementWindow,
     onCloseImbuementWindow = onCloseImbuementWindow
   })
+
+  -- Button to open imbuement window (server will open panel only in PZ)
+  imbueButton = modules.client_topmenu.addLeftButton('imbueButton', tr('Imbue') .. ' (' .. tr('Protection Zone only') .. ')', '/images/game/imbuing/imbue_empty', openImbueFromClient)
+  if imbueButton then
+    imbueButton:setTooltip(tr("Open imbuement window to enchant items. Only works in a protection zone."))
+  end
 
   imbuingWindow = g_ui.displayUI('imbuing')
   emptyImbue = imbuingWindow.emptyImbue
@@ -136,7 +149,10 @@ function terminate()
     onImbuementWindow = onImbuementWindow,
     onCloseImbuementWindow = onCloseImbuementWindow
   })
-  
+  if imbueButton then
+    imbueButton:destroy()
+    imbueButton = nil
+  end
   imbuingWindow:destroy()
 end
 

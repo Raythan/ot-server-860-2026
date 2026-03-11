@@ -772,7 +772,7 @@ end
 
 function Player:canBeAppliedImbuement(imbuement, item)
 	local categories = {}
-	local slots = ItemType(item:getId()):getImbuingSlots()
+	local slots = getItemImbuingSlots(item:getId())
 	if slots > 0 then
 		for slot = 0, slots - 1 do
 			local duration = item:getImbuementDuration(slot)
@@ -806,6 +806,10 @@ function Player:canBeAppliedImbuement(imbuement, item)
 end
 
 function Player:onApplyImbuement(imbuement, item, slot, protectionCharm)
+	if not self:getTile():hasFlag(TILESTATE_PROTECTIONZONE) then
+		self:sendImbuementResult(MESSAGEDIALOG_IMBUEMENT_ERROR, "You can only imbue items in a protection zone.")
+		return false
+	end
 	for _, pid in pairs(imbuement:getItems()) do
 		if self:getItemCount(pid.itemid) < pid.count then
 			self:sendImbuementResult(MESSAGEDIALOG_IMBUEMENT_ROLL_FAILED, "You don't have all necessary items.")
@@ -850,9 +854,28 @@ function Player:onApplyImbuement(imbuement, item, slot, protectionCharm)
 	return true
 end
 
+function Player:openImbuementPanelForItem(self, item)
+	if not self:getTile():hasFlag(TILESTATE_PROTECTIONZONE) then
+		self:sendTextMessage(MESSAGE_STATUS_SMALL, "You can only open the imbuement window in a protection zone.")
+		return false
+	end
+	if not item or item:getTopParent() ~= self then
+		return false
+	end
+	if getImbuingSlotsForItem(item:getId()) == 0 then
+		self:sendTextMessage(MESSAGE_STATUS_SMALL, "This item cannot be imbued.")
+		return false
+	end
+	return self:sendImbuementPanel(item)
+end
+
 function Player:clearImbuement(item, slot)
-	local slots = ItemType(item:getId()):getImbuingSlots()
-	if slots < slot then
+	if not self:getTile():hasFlag(TILESTATE_PROTECTIONZONE) then
+		self:sendImbuementResult(MESSAGEDIALOG_CLEARING_CHARM_ERROR, "You can only clear imbuements in a protection zone.")
+		return false
+	end
+	local slots = getItemImbuingSlots(item:getId())
+	if slot < 0 or slots <= slot then
 		self:sendImbuementResult(MESSAGEDIALOG_CLEARING_CHARM_ERROR, "Sorry, not possible.")
 		return false
 	end
@@ -893,7 +916,7 @@ function Player:onCombat(target, item, primaryDamage, primaryType, secondaryDama
 		return primaryDamage, primaryType, secondaryDamage, secondaryType
 	end
 
-	local slots = ItemType(item:getId()):getImbuingSlots()
+	local slots = getItemImbuingSlots(item:getId())
 	if slots > 0 then
 		for i = 0, slots - 1 do
 			local imbuement = item:getImbuement(i)
