@@ -60,6 +60,10 @@ end
 
 function UIItem:onHoverChange(hovered)
   UIWidget.onHoverChange(self, hovered)
+
+  if modules.game_itemhover and modules.game_itemhover.onItemHoverChange then
+    modules.game_itemhover.onItemHoverChange(self, hovered)
+  end
     
   if self:isVirtual() or not self:isDraggable() then return end
 
