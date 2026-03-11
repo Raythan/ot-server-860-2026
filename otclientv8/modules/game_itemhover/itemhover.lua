@@ -72,27 +72,25 @@ local function showPopup(text)
   contentLabel:resizeToText()
   local th = titleLabel:getHeight()
   local ch = contentLabel:getHeight()
-  -- Dimensões do conteúdo: largura fixa + padding; altura = título + espaço + conteúdo + paddings
+  -- Fixar altura dos labels ao valor calculado para evitar sobreposição (não deixar em 800px)
+  titleLabel:setHeight(th)
+  local contentH = ch
+  -- Dimensões do conteúdo: largura fixa + padding; altura = título + espaço + conteúdo + paddings (caixa ao tamanho do texto)
   local innerW = TOOLTIP_TEXT_WIDTH + TOOLTIP_PAD_H
   local innerH = TOOLTIP_PAD_TOP + th + TOOLTIP_GAP + ch + TOOLTIP_PAD_BOTTOM
   local capped = innerH > TOOLTIP_MAX_HEIGHT
   if capped then
     innerH = TOOLTIP_MAX_HEIGHT
-  end
-  local contentY = TOOLTIP_PAD_TOP + th + TOOLTIP_GAP
-  local contentH = ch
-  if capped then
+    local contentY = TOOLTIP_PAD_TOP + th + TOOLTIP_GAP
     local availableH = innerH - contentY - TOOLTIP_PAD_BOTTOM
     contentH = math.max(0, availableH)
   end
-  if ch > 0 then
-    contentLabel:setHeight(contentH)
-  end
+  contentLabel:setHeight(contentH)
   -- Centralizar horizontalmente: labels com largura TOOLTIP_TEXT_WIDTH no painel innerW
   local leftX = math.floor((innerW - TOOLTIP_TEXT_WIDTH) / 2)
-  -- Centralizar verticalmente o bloco título + conteúdo no painel
-  local totalBlockH = th + TOOLTIP_GAP + (capped and contentH or ch)
-  local topY = math.floor((innerH - totalBlockH) / 2)
+  -- Centralizar verticalmente o bloco título + conteúdo no painel (evitar topY negativo quando capped)
+  local totalBlockH = th + TOOLTIP_GAP + contentH
+  local topY = math.max(0, math.floor((innerH - totalBlockH) / 2))
   local contentYPos = topY + th + TOOLTIP_GAP
   titleLabel:setPosition(topoint(leftX .. ' ' .. topY))
   contentLabel:setPosition(topoint(leftX .. ' ' .. contentYPos))
