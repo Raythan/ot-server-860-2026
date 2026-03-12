@@ -9,14 +9,12 @@ local LOOK_TIMEOUT_MS = 2000
 local BORDER_OUTER_COLOR = '#1e3a5f'
 local BORDER_INNER_COLOR = '#3d5a80'
 local BACKGROUND_COLOR = '#2a2a4acc'  -- azul/roxo com alpha
-local TITLE_COLOR = '#ffffff'
-local CONTENT_COLOR = '#e0e0ff'
+local TEXT_COLOR = '#e0e0ff'
 
 local popupPanel       -- painel raiz (opacidade aplicada aqui)
 local borderPanel      -- borda dupla (outer + inner)
 local innerPanel       -- fundo do conteúdo
-local titleLabel
-local contentLabel
+local contentLabel     -- único label com todo o texto (evita sobreposição e perda de quebras de linha)
 local hoverTimer
 local currentItemWidget
 local waitingForLookFromHover = false
@@ -40,72 +38,51 @@ local function movePopup()
   popupPanel:setPosition(pos)
 end
 
--- Extrai título (primeira linha) e corpo do texto do Look.
-local function splitTitleAndContent(text)
-  if not text or text:len() == 0 then return '', '' end
-  local firstLine = text:match('^([^\r\n]+)') or text
-  local rest = text:match('^[^\r\n]+\r?\n(.+)$') or ''
-  return firstLine, rest
+-- Normaliza quebras de linha (servidor pode enviar \r\n ou \r) e retorna o texto limpo.
+local function normalizeLookText(text)
+  if not text or text:len() == 0 then return '' end
+  return text:gsub('\r\n', '\n'):gsub('\r', '\n')
 end
 
--- Largura fixa do texto para quebra de linha consistente; altura máxima do tooltip
+-- Largura fixa do texto para quebra de linha consistente; padding ao redor do texto
 local TOOLTIP_TEXT_WIDTH = 340
-local TOOLTIP_MAX_HEIGHT = 420
-local TOOLTIP_PAD_H = 20
-local TOOLTIP_PAD_TOP = 8
-local TOOLTIP_GAP = 8
-local TOOLTIP_PAD_BOTTOM = 12
--- Altura inicial alta para o motor calcular corretamente a quebra de linha (evita sobreposição)
-local TOOLTIP_INIT_HEIGHT = 800
+local TOOLTIP_PAD_H = 16
+local TOOLTIP_PAD_V = 12
+-- Altura inicial alta para o motor calcular corretamente a quebra de linha
+local TOOLTIP_INIT_HEIGHT = 1200
+-- Altura aproximada por linha (fallback se getTextSize retornar valor incorreto)
+local APPROX_LINE_HEIGHT = 16
 
 local function showPopup(text)
-  if not popupPanel or not titleLabel or not contentLabel or not text or text:len() == 0 then return end
-  local title, content = splitTitleAndContent(text)
-  local hasContent = content and content:len() > 0
+  if not popupPanel or not contentLabel or not text or text:len() == 0 then return end
 
-  -- Fixed width; tall initial height so the engine wraps text correctly for getTextSize()
-  titleLabel:setWidth(TOOLTIP_TEXT_WIDTH)
-  titleLabel:setHeight(TOOLTIP_INIT_HEIGHT)
-  titleLabel:setText(title)
-  local th = math.max(1, titleLabel:getTextSize().height)
-  titleLabel:setHeight(th)
+  local normalized = normalizeLookText(text)
 
-  local ch = 0
-  if hasContent then
-    contentLabel:setWidth(TOOLTIP_TEXT_WIDTH)
-    contentLabel:setHeight(TOOLTIP_INIT_HEIGHT)
-    contentLabel:setText(content)
-    ch = math.max(1, contentLabel:getTextSize().height)
-    contentLabel:setHeight(ch)
-    contentLabel:setVisible(true)
-  else
-    contentLabel:setText('')
-    contentLabel:setHeight(0)
-    contentLabel:setVisible(false)
+  -- Um único label: preserva todas as quebras de linha do servidor e evita erro de split
+  contentLabel:setWidth(TOOLTIP_TEXT_WIDTH)
+  contentLabel:setHeight(TOOLTIP_INIT_HEIGHT)
+  contentLabel:setText(normalized)
+
+  local textSize = contentLabel:getTextSize()
+  local contentH = math.max(1, textSize.height or 1)
+  -- Fallback: o motor pode retornar altura incorreta com setTextWrap; estimar por linhas explícitas e por quebra por largura
+  local lineCount = 1
+  for _ in normalized:gmatch('\n') do lineCount = lineCount + 1 end
+  local charsPerLine = math.max(1, math.floor(TOOLTIP_TEXT_WIDTH / 7))  -- aprox. 7px por caractere verdana-11
+  local wrappedLines = math.ceil(#normalized / charsPerLine)
+  local estimatedLines = math.max(lineCount, wrappedLines)
+  local minHeight = estimatedLines * APPROX_LINE_HEIGHT
+  if contentH < minHeight then
+    contentH = minHeight
   end
 
-  local contentH = ch
-  local gap = hasContent and TOOLTIP_GAP or 0
-  local innerW = TOOLTIP_TEXT_WIDTH + TOOLTIP_PAD_H
-  local innerH = TOOLTIP_PAD_TOP + th + gap + ch + TOOLTIP_PAD_BOTTOM
-  local capped = innerH > TOOLTIP_MAX_HEIGHT
-  if capped then
-    innerH = TOOLTIP_MAX_HEIGHT
-    local contentY = TOOLTIP_PAD_TOP + th + gap
-    local availableH = innerH - contentY - TOOLTIP_PAD_BOTTOM
-    contentH = math.max(0, availableH)
-    contentLabel:setHeight(contentH)
-  end
+  contentLabel:setHeight(contentH)
 
-  local leftX = math.floor((innerW - TOOLTIP_TEXT_WIDTH) / 2)
-  local totalBlockH = th + gap + contentH
-  local topY = math.max(0, math.floor((innerH - totalBlockH) / 2))
-  local contentYPos = topY + th + gap
+  -- Tamanho do painel = conteúdo + padding (caixa se ajusta dinamicamente ao texto)
+  local innerW = TOOLTIP_TEXT_WIDTH + (TOOLTIP_PAD_H * 2)
+  local innerH = (TOOLTIP_PAD_V * 2) + contentH
 
-  titleLabel:setPosition(topoint(leftX .. ' ' .. topY))
-  if hasContent then
-    contentLabel:setPosition(topoint(leftX .. ' ' .. contentYPos))
-  end
+  contentLabel:setPosition(topoint(TOOLTIP_PAD_H .. ' ' .. TOOLTIP_PAD_V))
 
   innerPanel:setWidth(innerW)
   innerPanel:setHeight(innerH)
@@ -226,23 +203,14 @@ function init()
   innerPanel:setPosition(topoint('2 2'))
   innerPanel:setClipping(true)
 
-  -- Título do tooltip (primeira linha do Look)
-  titleLabel = g_ui.createWidget('UILabel', innerPanel)
-  titleLabel:setId('itemHoverTitle')
-  titleLabel:setTextAlign(AlignCenter)
-  titleLabel:setTextWrap(true)
-  titleLabel:setTextAutoResize(false)
-  titleLabel:setFont('verdana-11')
-  titleLabel:setColor(TITLE_COLOR)
-
-  -- Conteúdo (restante do texto)
+  -- Único label com todo o texto: quebra de linha correta, sem sobreposição, padding ao redor
   contentLabel = g_ui.createWidget('UILabel', innerPanel)
   contentLabel:setId('itemHoverContent')
-  contentLabel:setTextAlign(AlignCenter)
+  contentLabel:setTextAlign(AlignLeft)
   contentLabel:setTextWrap(true)
   contentLabel:setTextAutoResize(false)
   contentLabel:setFont('verdana-11')
-  contentLabel:setColor(CONTENT_COLOR)
+  contentLabel:setColor(TEXT_COLOR)
 end
 
 function terminate()
@@ -254,6 +222,5 @@ function terminate()
   end
   borderPanel = nil
   innerPanel = nil
-  titleLabel = nil
   contentLabel = nil
 end
