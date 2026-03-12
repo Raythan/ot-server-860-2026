@@ -60,6 +60,10 @@ end
 
 function UIItem:onHoverChange(hovered)
   UIWidget.onHoverChange(self, hovered)
+
+  if modules.game_itemhover and modules.game_itemhover.onItemHoverChange then
+    modules.game_itemhover.onItemHoverChange(self, hovered)
+  end
     
   if self:isVirtual() or not self:isDraggable() then return end
 
@@ -130,8 +134,11 @@ end
 
 function UIItem:onItemChange()
   local tooltip = nil
-  if self:getItem() and self:getItem():getTooltip():len() > 0 then
-    tooltip = self:getItem():getTooltip()
+  -- Se o módulo game_itemhover estiver ativo, o tooltip é mostrado por ele (popup estilizado)
+  if not (modules.game_itemhover and modules.game_itemhover.onItemHoverChange) then
+    if self:getItem() and self:getItem():getTooltip():len() > 0 then
+      tooltip = self:getItem():getTooltip()
+    end
   end
   self:setTooltip(tooltip)
 end

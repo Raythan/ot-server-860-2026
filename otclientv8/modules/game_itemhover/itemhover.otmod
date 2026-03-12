@@ -1,0 +1,8 @@
+Module
+  name: game_itemhover
+  description: Show item details (Look description) in a popup when hovering over items in inventory or containers. Opacity configurable in Options.
+  author: ot-server
+  sandboxed: true
+  scripts: [ itemhover ]
+  @onLoad: init()
+  @onUnload: terminate()
