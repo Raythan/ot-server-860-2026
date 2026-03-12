@@ -8,10 +8,10 @@ local SHOP_OPCODE = 201
 
 -- Get account premium points (coins) from DB
 function getAccountPremiumPoints(accountId)
-	local result = db.storeQuery("SELECT `premium_points` FROM `accounts` WHERE `id` = " .. (accountId or 0))
-	if not result then return 0 end
-	local points = result.getNumber(result, "premium_points")
-	result.free(result)
+	local resultId = db.storeQuery("SELECT `premium_points` FROM `accounts` WHERE `id` = " .. (accountId or 0))
+	if not resultId then return 0 end
+	local points = result.getNumber(resultId, "premium_points")
+	result.free(resultId)
 	return points or 0
 end
 
@@ -95,20 +95,20 @@ end
 
 -- Get offer by id (for purchase validation)
 function getShopOffer(offerId)
-	local result = db.storeQuery("SELECT `id`, `category`, `coins`, `itemid`, `count`, `offer_name`, `offer_description`, `offer_type`, `hide` FROM `z_shop_offer` WHERE `id` = " .. (offerId or 0))
-	if not result then return nil end
+	local resultId = db.storeQuery("SELECT `id`, `category`, `coins`, `itemid`, `count`, `offer_name`, `offer_description`, `offer_type`, `hide` FROM `z_shop_offer` WHERE `id` = " .. (offerId or 0))
+	if not resultId then return nil end
 	local offer = {
-		id = result.getNumber(result, "id"),
-		category = result.getNumber(result, "category"),
-		coins = result.getNumber(result, "coins"),
-		itemid = result.getNumber(result, "itemid"),
-		count = math.max(1, result.getNumber(result, "count")),
-		offer_name = result.getString(result, "offer_name"),
-		offer_description = result.getString(result, "offer_description"),
-		offer_type = result.getString(result, "offer_type"),
-		hide = result.getNumber(result, "hide")
+		id = result.getNumber(resultId, "id"),
+		category = result.getNumber(resultId, "category"),
+		coins = result.getNumber(resultId, "coins"),
+		itemid = result.getNumber(resultId, "itemid"),
+		count = math.max(1, result.getNumber(resultId, "count")),
+		offer_name = result.getString(resultId, "offer_name"),
+		offer_description = result.getString(resultId, "offer_description"),
+		offer_type = result.getString(resultId, "offer_type"),
+		hide = result.getNumber(resultId, "hide")
 	}
-	result.free(result)
+	result.free(resultId)
 	if offer.hide ~= 0 then return nil end
 	return offer
 end
@@ -148,14 +148,14 @@ end
 function getShopHistory(accountId, limit)
 	limit = math.min(tonumber(limit) or 50, 100)
 	local list = {}
-	local result = db.storeQuery("SELECT h.`offer_id`, h.`price`, h.`trans_real`, o.`offer_name`, o.`offer_description`, o.`default_image` FROM `z_shop_history_item` h LEFT JOIN `z_shop_offer` o ON o.`id` = h.`offer_id` WHERE h.`to_account` = " .. accountId .. " AND h.`trans_state` = 'realized' ORDER BY h.`trans_real` DESC LIMIT " .. limit)
-	if not result then return list end
+	local resultId = db.storeQuery("SELECT h.`offer_id`, h.`price`, h.`trans_real`, o.`offer_name`, o.`offer_description`, o.`default_image` FROM `z_shop_history_item` h LEFT JOIN `z_shop_offer` o ON o.`id` = h.`offer_id` WHERE h.`to_account` = " .. accountId .. " AND h.`trans_state` = 'realized' ORDER BY h.`trans_real` DESC LIMIT " .. limit)
+	if not resultId then return list end
 	repeat
-		local offerId = result.getNumber(result, "offer_id")
-		local price = result.getNumber(result, "price")
-		local name = result.getString(result, "offer_name") or "Unknown"
-		local desc = result.getString(result, "offer_description") or ""
-		local img = result.getString(result, "default_image") or ""
+		local offerId = result.getNumber(resultId, "offer_id")
+		local price = result.getNumber(resultId, "price")
+		local name = result.getString(resultId, "offer_name") or "Unknown"
+		local desc = result.getString(resultId, "offer_description") or ""
+		local img = result.getString(resultId, "default_image") or ""
 		table.insert(list, {
 			id = offerId,
 			type = "image",
@@ -164,20 +164,32 @@ function getShopHistory(accountId, limit)
 			title = name,
 			description = desc
 		})
-	until not result.next(result)
-	result.free(result)
+	until not result.next(resultId)
+	result.free(resultId)
 	return list
 end
 
--- Send JSON to client via extended opcode (single packet; if too large we'd need to chunk like client)
+-- Send JSON to client via extended opcode, chunking with S/P/E when needed.
 function sendShopResponse(player, payload)
 	if not player then return end
 	-- Check method exists without calling it (player:sendExtendedOpcode in condition can cause errors with userdata)
 	if type(player.sendExtendedOpcode) ~= "function" then return end
 	local jsonStr = json.encode(payload)
-	if #jsonStr > 60000 then
-		-- Split S / P / E not implemented on server send; keep single packet or truncate
-		jsonStr = jsonStr:sub(1, 60000)
+	local maxPacketSize = 65000
+
+	if #jsonStr <= maxPacketSize then
+		player:sendExtendedOpcode(SHOP_OPCODE, jsonStr)
+		return
 	end
-	player:sendExtendedOpcode(SHOP_OPCODE, jsonStr)
+
+	local chunks = {}
+	for i = 1, #jsonStr, maxPacketSize do
+		table.insert(chunks, jsonStr:sub(i, i + maxPacketSize - 1))
+	end
+
+	player:sendExtendedOpcode(SHOP_OPCODE, "S" .. chunks[1])
+	for i = 2, #chunks - 1 do
+		player:sendExtendedOpcode(SHOP_OPCODE, "P" .. chunks[i])
+	end
+	player:sendExtendedOpcode(SHOP_OPCODE, "E" .. chunks[#chunks])
 end

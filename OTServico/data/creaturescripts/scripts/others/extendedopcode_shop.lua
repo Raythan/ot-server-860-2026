@@ -13,18 +13,21 @@ function onExtendedOpcode(player, opcode, buffer)
 
 	-- Client may send JSON in one packet or split with S (start), P (part), E (end)
 	local status = buffer:sub(1, 1)
-	local data = buffer:sub(2)
+	local data = buffer
 	local pid = player:getId()
 
 	if status == "S" then
+		data = buffer:sub(2)
 		shopJsonBuffer[pid] = data
 		return true
 	elseif status == "P" then
+		data = buffer:sub(2)
 		if shopJsonBuffer[pid] then
 			shopJsonBuffer[pid] = shopJsonBuffer[pid] .. data
 		end
 		return true
 	elseif status == "E" then
+		data = buffer:sub(2)
 		if shopJsonBuffer[pid] then
 			data = shopJsonBuffer[pid] .. data
 			shopJsonBuffer[pid] = nil
