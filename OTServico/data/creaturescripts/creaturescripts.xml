@@ -244,6 +244,9 @@
 	<!-- Gray Island -->
 	<event type="kill" name="deeplingBosses" script="gray_island/deeplingKill.lua"/>
 
+	<!-- Ingame Shop (OtClient extended opcode 201) -->
+	<event type="extendedopcode" name="ExtendedOpcode" script="others/extendedopcode_shop.lua"/>
+
 	<!-- Others -->
 	<event type="login" name="AdventurerBlessings" script="adventureblessings.lua"/>
 	<event type="login" name="PlayerLogin" script="others/login.lua" />
