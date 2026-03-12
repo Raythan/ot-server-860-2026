@@ -1,2 +1,9 @@
 <?xml version="1.0"?>
-<spawns />
+<spawns>
+	<spawn centerx="131" centery="130" centerz="7" radius="11">
+		<npc name="Yasir" x="-2" y="11" z="7" spawntime="60" />
+		<npc name="Xodet" x="2" y="11" z="7" spawntime="60" />
+		<npc name="Naji" x="6" y="11" z="7" spawntime="60" />
+		<npc name="Nah'bob" x="11" y="11" z="7" spawntime="60" />
+	</spawn>
+</spawns>
