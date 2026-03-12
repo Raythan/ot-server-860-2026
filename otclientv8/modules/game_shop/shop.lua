@@ -102,10 +102,11 @@ function show()
   if not shop or not shopButton then
     return
   end
-  if g_game.getFeature(GameIngameStore) then
+  -- Only open Tibia store when NOT using our server shop (Extended Opcode 201)
+  if g_game.getFeature(GameIngameStore) and not g_game.getFeature(GameExtendedOpcode) then
     g_game.openStore(0)
   end
-  
+
   shop:show()
   shop:raise()
   shop:focus()

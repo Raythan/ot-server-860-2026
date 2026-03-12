@@ -171,7 +171,9 @@ end
 
 -- Send JSON to client via extended opcode (single packet; if too large we'd need to chunk like client)
 function sendShopResponse(player, payload)
-	if not player or not player:sendExtendedOpcode then return end
+	if not player then return end
+	-- Check method exists without calling it (player:sendExtendedOpcode in condition can cause errors with userdata)
+	if type(player.sendExtendedOpcode) ~= "function" then return end
 	local jsonStr = json.encode(payload)
 	if #jsonStr > 60000 then
 		-- Split S / P / E not implemented on server send; keep single packet or truncate
